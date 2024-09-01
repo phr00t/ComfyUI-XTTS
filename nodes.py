@@ -26,7 +26,7 @@ class XTTS_INFER_SRT:
         return {"required":
                     {
                      "text": ("SRT",),
-                     "prompt_audio": ("AUDIOPATH",),
+                     "prompt_audio": ("STRING",),
                      "language": (language_list,{
                          "default": "zh-cn"
                      }),
@@ -65,7 +65,7 @@ class XTTS_INFER_SRT:
     CATEGORY = "AIFSH_XTTS"
     DESCRIPTION = "hello world!"
 
-    RETURN_TYPES = ("AUDIOPATH",)
+    RETURN_TYPES = ("STRING",)
 
     OUTPUT_NODE = False
 
@@ -189,13 +189,13 @@ class XTTS_INFER:
     @classmethod
     def INPUT_TYPES(s):
         return {"required":
-                    {"audio": ("AUDIOPATH",),
+                    {"audio": ("STRING",),
                      "text": ("STRING",{
-                         "default": "你好啊！世界",
+                         "default": "hello world!",
                          "multiline": True
                       }),
                      "language": (language_list,{
-                         "default": "zh-cn"
+                         "default": "en"
                      }),
                      "temperature":("FLOAT",{
                          "default":0.65,
@@ -223,20 +223,30 @@ class XTTS_INFER:
                      "speed":("FLOAT",{
                          "default":1.0,
                      }),
+                     "delay":("FLOAT",{
+                         "default":0.0,
+                     }),
                      }
                 }
 
     CATEGORY = "AIFSH_XTTS"
     DESCRIPTION = "hello world!"
 
-    RETURN_TYPES = ("AUDIOPATH",)
+    RETURN_TYPES = ("STRING",)
 
     OUTPUT_NODE = False
 
     FUNCTION = "get_wav_tts"
 
     def get_wav_tts(self, audio, text,language,temperature,length_penalty,
-                    repetition_penalty,top_k,top_p,speed):
+                    repetition_penalty,top_k,top_p,speed,delay):
+                        
+        wav_path = os.path.join(output_path, f"{time.time()}_xtts.wav")
+        
+        if text == "":
+            AudioSegment.silent(100).export(wav_path, format="wav")
+            return (wav_path,)
+        
         if not os.path.isfile(os.path.join(pretrained_models_path,"model.pth")):
             print("Downloading model...")
             snapshot_download(repo_id="coqui/XTTS-v2",revision="v2.0.3",local_dir=pretrained_models_path)
@@ -265,8 +275,13 @@ class XTTS_INFER:
             speed=speed,
             enable_text_splitting=True
         )
-        wav_path = os.path.join(output_path, f"{time.time()}_xtts.wav")
         torchaudio.save(wav_path, torch.tensor(out["wav"]).unsqueeze(0), 24000,bits_per_sample=16)
+        
+        if delay > 0:
+            text_audio = AudioSegment.silent(delay * 1000.0) + AudioSegment.from_file(wav_path)      
+            wav_path = wav_path + "_silence.wav"
+            text_audio.export(wav_path, format="wav")
+        
         del model;import gc;gc.collect();torch.cuda.empty_cache()
         return (wav_path,)
 
@@ -274,7 +289,7 @@ class PreViewAudio:
     @classmethod
     def INPUT_TYPES(s):
         return {"required":
-                    {"audio": ("AUDIOPATH",),}
+                    {"audio": ("STRING",),}
                 }
 
     CATEGORY = "AIFSH_XTTS"
@@ -302,7 +317,7 @@ class LoadAudioPath:
 
     CATEGORY = "AIFSH_XTTS"
 
-    RETURN_TYPES = ("AUDIOPATH",)
+    RETURN_TYPES = ("STRING",)
     FUNCTION = "load_audio"
 
     def load_audio(self, audio):
